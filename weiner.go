@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
-	"math/rand"
 )
 
 // "fmt"
@@ -72,13 +72,27 @@ func main() {
 	// png.Encode(cone, im_cone)
 	// fmt.Printf("saving %s\n", cone.Name())
 
-	data := make([]float64, 9)
-	for i := range data {
-		data[i] = rand.NormFloat64()
-	}
-	a := mat64.NewDense(3, 3, data)
+	//data := make([]float64, 9)
+	//for i := range data {
+	//	data[i] = rand.NormFloat64()
+	//}
+	//a := mat64.NewDense(3, 3, data)
 
 	// Solve(a, b Matrix) error
+	a := mat64.NewDense(3, 3, []float64{
+		2, 0, 0,
+		0, 1, 0,
+		1, 0, 1,
+	})
+	b := mat64.NewVector(3, []float64{1, 2, 2})
+
+	var x mat64.Vector
+	if err := x.SolveVec(a, b); err != nil {
+		fmt.Println("Matrix is near singular: ", err)
+	}
+	fmt.Println("Solve a * x = b")
+	fmt.Printf("x = %0.4v\n", mat64.Formatted(&x, mat64.Prefix("    ")))
+
 }
 
 var area = 2
