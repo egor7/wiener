@@ -14,5 +14,6 @@ then
   ./wiener
 fi
 
-im_profile magnitude_cone.png magnitude_cone_profile.png
-feh magnitude_cone_profile.png
+im_profile -v magnitude_cone.png magnitude_cone_profile.png
+feh magnitude_cone_profile.png 
+#feh magnitude_cone.png 

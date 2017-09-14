@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"image/png"
 	"log"
+	"math"
 	"os"
 )
 
@@ -37,121 +38,79 @@ func main() {
 	bounds := im.Bounds()
 	w, h := bounds.Max.X-bounds.Min.X, bounds.Max.Y-bounds.Min.Y
 
-	// (ax^2+by^2+cxy+d-f(x,y))*x^2 = 0
-	//                          y^2 = 0
-	//                          xy  = 0
-	//                          1   = 0
-	//
-	// x4   x2y2 x3y  x2  | fx2
-	// x2y2 y4   xy3  y2  | fy2
-	// x3y  xy3  x2y2 xy  | fxy
-	// x2   y2   xy   1   | f
-
-	x2 := float64(0)
-	y2 := float64(0)
-	x4 := float64(0)
-	y4 := float64(0)
-	xy := float64(0)
-	x3y := float64(0)
-	xy3 := float64(0)
-	x2y2 := float64(0)
-
-	f := float64(0)
-	fx2 := float64(0)
-	fy2 := float64(0)
-	fxy := float64(0)
-
-	n := 0
+	img := make([]float64, w*h)
 	for c := 0; c < w; c++ {
 		for r := 0; r < h; r++ {
-			x := float64(c - w/2)
-			y := float64(r - h/2)
-			if x*x+y*y >= float64(w*h)/100.0 {
-				n = n + 1
-			}
+			img[c*h+r] = float64(color.GrayModel.Convert(im.At(c, r)).(color.Gray).Y)
 		}
 	}
 
-	dd := 1 / float64(n)
-	fmt.Printf("n: %d\n", n)
-	fmt.Printf("dd: %f\n", dd)
-
-	for c := 0; c < w; c++ {
-		for r := 0; r < h; r++ {
-			f_im := float64(color.GrayModel.Convert(im.At(c, r)).(color.Gray).Y)
-
-			x := float64(c - w/2)
-			y := float64(r - h/2)
-
-			//if x*x+y*y < float64((w*h))/36.0 && x*x+y*y >= float64((w+h)*(w+h))/360.0 {
-			if x*x+y*y >= float64(w*h)/100.0 {
-				x2 += x * x * dd
-				y2 += y * y * dd
-				x4 += x * x * x * x * dd
-				y4 += y * y * y * y * dd
-				xy += x * y * dd
-				x3y += x * x * x * y * dd
-				xy3 += x * y * y * y * dd
-				x2y2 += x * x * y * y * dd
-
-				f += f_im * dd
-				fx2 += f_im * x * x * dd
-				fy2 += f_im * y * y * dd
-				fxy += f_im * x * y * dd
-			}
-		}
-	}
-
-	fmt.Printf("xy: %f\n", xy)
-
-	a := mat64.NewDense(4, 4, []float64{
-		x4, x2y2, x3y, x2,
-		x2y2, y4, xy3, y2,
-		x3y, xy3, x2y2, xy,
-		x2, y2, xy, 1,
-	})
-	b := mat64.NewVector(4, []float64{fx2, fy2, fxy, f})
-
-	var x mat64.Vector
-	if err := x.SolveVec(a, b); err != nil {
-		fmt.Println("Matrix is near singular: ", err)
-	}
-	fmt.Println("Solve a * x = b")
-	fmt.Printf("x = %0.4v\n", mat64.Formatted(&x, mat64.Prefix("    ")))
-
+	var (
+		//xaI, xbI, xcI          float64
+		xaE, xbE, xcE float64
+		//xaIO, xbIO, xcIO       float64
+		xaEO, xbEO, xcEO       float64
+		deltaI, deltaE, deltaO float64
+		rO                     float64
+	)
 	fmt.Printf("processing %s[%dx%d]...", imf.Name(), w, h)
+
+	//minr := w / 2
+	//if h < w {
+	//	minr = h / 2
+	//}
+	//for r := 5; r < minr-5; r++ {
+	for r := 80; r <= 80; r++ {
+		//xaI, xbI, xcI, deltaI = approx(img, w, h, r, -1)
+		xaE, xbE, xcE, deltaE = approx(img, w, h, r, 1)
+
+		if deltaO == 0 {
+			//xaIO = xaI
+			//xbIO = xbI
+			//xcIO = xcI
+			xaEO = xaE
+			xbEO = xbE
+			xcEO = xcE
+			deltaO = deltaI + deltaE
+			rO = float64(r)
+		}
+		if deltaI+deltaE < deltaO {
+			//xaIO = xaI
+			//xbIO = xbI
+			//xcIO = xcI
+			xaEO = xaE
+			xbEO = xbE
+			xcEO = xcE
+			deltaO = deltaI + deltaE
+			rO = float64(r)
+		}
+
+		if r%10 == 0 {
+			//fmt.Printf(".")
+			fmt.Printf("\ndeltaI,E[%3d] = %f, %f", r, deltaI, deltaE)
+		}
+	}
+	fmt.Printf("\n")
+	fmt.Printf("rO = %f", rO)
+
 	im_cone := image.NewGray(image.Rect(0, 0, w, h))
 	for c := 0; c < w; c++ {
 		for r := 0; r < h; r++ {
-			//var max float64
-			//var max_l int
-			//for l, _ := range imgs {
-			//	d := disp(imgs[l], c, r, width, height)
-			//	if d >= max {
-			//		max = d
-			//		max_l = l
-			//	}
+			x := math.Abs(float64(c - w/2))
+			y := math.Abs(float64(r - h/2))
+
+			//gray := float64(0)
+			//if x*x+y*y <= rO*rO {
+			//	gray = xaIO*x + xbIO*y + xcIO
+			//} else {
+			//	gray = xaEO*x + xbEO*y + xcEO
 			//}
-			// gray := float64(color.GrayModel.Convert(im.At(c, r)).(color.Gray).Y)
-			// gray = gray * 1000000
-
-			xa := x.At(0, 0)
-			xb := x.At(1, 0)
-			xc := x.At(2, 0)
-			xd := x.At(3, 0)
-
-			x := float64(c - w/2)
-			y := float64(r - h/2)
-
-			gray := float64(0)
-			if x*x+y*y >= float64(w*h)/100.0 {
-				gray = xa*x*x + xb*y*y + xc*x*y + xd
+			gray := img[c*h+r] - (xaEO*x + xbEO*y + xcEO)
+			if gray < 0 {
+				gray = 0
 			}
 
 			im_cone.Set(c, r, color.Gray{uint8(gray)})
-		}
-		if c%10 == 0 {
-			fmt.Printf(".")
 		}
 	}
 
@@ -166,22 +125,98 @@ func main() {
 
 var area = 2
 
-func disp(img []color.Color, col, row, width, height int) float64 {
-	var (
-		n     int
-		x, x2 float64
-	)
-	for c := col - area; c < col+area; c++ {
-		for r := row - area; r < row+area; r++ {
-			if c < 0 || c >= width || r < 0 || r >= height || (col-c)*(col-c)+(row-r)*(row-r) > area*area {
-				// continue
-			} else {
-				n += 1
-				gray := float64(color.GrayModel.Convert(img[c*height+r]).(color.Gray).Y)
-				x += gray
-				x2 += gray * gray
+// side = 1 => exterior
+// side = -1 => interior
+func approx(img []float64, w int, h int, dr int, side int) (xa, xb, xc, delta float64) {
+	xa = 0
+	xb = 0
+	xc = 0
+	delta = 0
+	// (ax^2+by^2+cxy+d-f(x,y))*x^2 = 0
+	//                          y^2 = 0
+	//                          xy  = 0
+	//                          1   = 0
+	//
+	// x4   x2y2 x3y  x2  | fx2
+	// x2y2 y4   xy3  y2  | fy2
+	// x3y  xy3  x2y2 xy  | fxy
+	// x2   y2   xy   1   | f
+
+	// instead use a plate:
+
+	// (ax + by + c - f(x,y))^2 ~> min
+	//
+	// (ax + by + c - f(x,y))x
+	// (ax + by + c - f(x,y))y
+	// (ax + by + c - f(x,y))
+	//
+	// x2 xy x1 | fx
+	// xy y2 y1 | fy
+	// x1 y1  1 | f
+
+	n := 0
+	for c := 0; c < w; c++ {
+		for r := 0; r < h; r++ {
+			x := c - w/2
+			y := r - h/2
+			if x >= 0 && y >= 0 && side*(x*x+y*y) > side*(dr*dr) {
+				n = n + 1
 			}
 		}
 	}
-	return float64(n)*x2/(x*x) - 1
+
+	var (
+		x2, y2, xy, x1, y1 float64
+		f, fx, fy          float64
+	)
+	dd := 1 / float64(n)
+	for c := 0; c < w; c++ {
+		for r := 0; r < h; r++ {
+			f_im := img[c*h+r]
+
+			x := c - w/2
+			y := r - h/2
+
+			if x >= 0 && y >= 0 && side*(x*x+y*y) > side*(dr*dr) {
+				x2 += float64(x*x) * dd
+				y2 += float64(y*y) * dd
+				xy += float64(x*y) * dd
+				x1 += float64(x) * dd
+				y1 += float64(y) * dd
+
+				f += f_im * dd
+				fx += float64(x) * f_im * dd
+				fy += float64(y) * f_im * dd
+			}
+		}
+	}
+
+	a := mat64.NewDense(3, 3, []float64{
+		x2, xy, x1,
+		xy, y2, y1,
+		x1, y1, 1,
+	})
+	b := mat64.NewVector(3, []float64{fx, fy, f})
+
+	var x mat64.Vector
+	if err := x.SolveVec(a, b); err != nil {
+		//fmt.Println("Matrix is near singular: ", err)
+	}
+	//fmt.Printf("x = %0.4v\n", mat64.Formatted(&x, mat64.Prefix("    ")))
+
+	xa = x.At(0, 0)
+	xb = x.At(1, 0)
+	xc = x.At(2, 0)
+	for c := 0; c < w; c++ {
+		for r := 0; r < h; r++ {
+			x := float64(c - w/2)
+			y := float64(r - h/2)
+
+			if x >= 0 && y >= 0 && float64(side)*(x*x+y*y) > float64(side*dr*dr) {
+				delta += math.Sqrt((xa*x+xb*y+xc-img[c*h+r])*(xa*x+xb*y+xc-img[c*h+r])) * dd
+			}
+		}
+	}
+
+	return
 }
