@@ -3,11 +3,12 @@ package main
 import (
 	"fmt"
 	"image"
-	"image/color"
-	"image/png"
 	"log"
 	"math"
 	"os"
+
+	"image/color"
+	"image/png"
 )
 
 // "fmt"
@@ -18,109 +19,130 @@ import (
 // "image/color"
 // _ "image/gif"
 // _ "image/jpeg"
-// "image/png"
 
 import "github.com/gonum/matrix/mat64"
 
 func main() {
-	imf, err := os.Open("magnitude_log.png")
+
+	// u
+	f_u, err := os.Open("u.png")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer imf.Close()
-	fmt.Printf("reading %s...\n", imf.Name())
+	defer f_u.Close()
+	fmt.Printf("read %s", f_u.Name())
 
 	// read image size
-	im, _, err := image.Decode(imf)
+	im_u, _, err := image.Decode(f_u)
 	if err != nil {
 		log.Fatal(err)
 	}
-	bounds := im.Bounds()
+	bounds := im_u.Bounds()
 	w, h := bounds.Max.X-bounds.Min.X, bounds.Max.Y-bounds.Min.Y
+	fmt.Printf(", size [%dx%d]\n", w, h)
 
-	img := make([]float64, w*h)
+	h_u := make([]float64, w*h)
 	for c := 0; c < w; c++ {
 		for r := 0; r < h; r++ {
-			img[c*h+r] = float64(color.GrayModel.Convert(im.At(c, r)).(color.Gray).Y)
+			h_u[c*h+r] = float64(color.GrayModel.Convert(im_u.At(c, r)).(color.Gray).Y)
 		}
 	}
 
-	var (
-		//xaI, xbI, xcI          float64
-		xaE, xbE, xcE float64
-		//xaIO, xbIO, xcIO       float64
-		xaEO, xbEO, xcEO       float64
-		deltaI, deltaE, deltaO float64
-		rO                     float64
-	)
-	fmt.Printf("processing %s[%dx%d]...", imf.Name(), w, h)
-
-	//minr := w / 2
-	//if h < w {
-	//	minr = h / 2
-	//}
-	//for r := 5; r < minr-5; r++ {
-	for r := 80; r <= 80; r++ {
-		//xaI, xbI, xcI, deltaI = approx(img, w, h, r, -1)
-		xaE, xbE, xcE, deltaE = approx(img, w, h, r, 1)
-
-		if deltaO == 0 {
-			//xaIO = xaI
-			//xbIO = xbI
-			//xcIO = xcI
-			xaEO = xaE
-			xbEO = xbE
-			xcEO = xcE
-			deltaO = deltaI + deltaE
-			rO = float64(r)
-		}
-		if deltaI+deltaE < deltaO {
-			//xaIO = xaI
-			//xbIO = xbI
-			//xcIO = xcI
-			xaEO = xaE
-			xbEO = xbE
-			xcEO = xcE
-			deltaO = deltaI + deltaE
-			rO = float64(r)
-		}
-
-		if r%10 == 0 {
-			//fmt.Printf(".")
-			fmt.Printf("\ndeltaI,E[%3d] = %f, %f", r, deltaI, deltaE)
-		}
-	}
-	fmt.Printf("\n")
-	fmt.Printf("rO = %f", rO)
-
-	im_cone := image.NewGray(image.Rect(0, 0, w, h))
+	// n
+	h_n := make([]float64, w*h)
+	a := 2.0
+	a2 := a * a
+	s := 0.0
 	for c := 0; c < w; c++ {
 		for r := 0; r < h; r++ {
-			x := math.Abs(float64(c - w/2))
-			y := math.Abs(float64(r - h/2))
+			x := float64(c - w/2)
+			y := float64(r - h/2)
+			x2 := x * x
+			y2 := y * y
+			h_n[c*h+r] = math.Exp((-x2-y2)/a2) / (a2 * math.Pi)
+			if h_n[c*h+r] > 0.01 {
+				fmt.Printf("h_n(%dx%d)=%f\n", c, r, h_n[c*h+r])
+			}
+			s += h_n[c*h+r]
+		}
+	}
+	fmt.Printf("%f\n", s)
 
-			//gray := float64(0)
-			//if x*x+y*y <= rO*rO {
-			//	gray = xaIO*x + xbIO*y + xcIO
-			//} else {
-			//	gray = xaEO*x + xbEO*y + xcEO
-			//}
-			gray := img[c*h+r] - (xaEO*x + xbEO*y + xcEO)
-			if gray < 0 {
-				gray = 0
+	/*
+		var (
+			//xaI, xbI, xcI          float64
+			xaE, xbE, xcE float64
+			//xaIO, xbIO, xcIO       float64
+			xaEO, xbEO, xcEO       float64
+			deltaI, deltaE, deltaO float64
+			rO                     float64
+		)
+		fmt.Printf("processing %s[%dx%d]...", imf.Name(), w, h)
+
+		//minr := w / 2
+		//if h < w {
+		//	minr = h / 2
+		//}
+		//for r := 5; r < minr-5; r++ {
+		for r := 80; r <= 80; r++ {
+			//xaI, xbI, xcI, deltaI = approx(img, w, h, r, -1)
+			xaE, xbE, xcE, deltaE = approx(img, w, h, r, 1)
+
+			if deltaO == 0 {
+				//xaIO = xaI
+				//xbIO = xbI
+				//xcIO = xcI
+				xaEO = xaE
+				xbEO = xbE
+				xcEO = xcE
+				deltaO = deltaI + deltaE
+				rO = float64(r)
+			}
+			if deltaI+deltaE < deltaO {
+				//xaIO = xaI
+				//xbIO = xbI
+				//xcIO = xcI
+				xaEO = xaE
+				xbEO = xbE
+				xcEO = xcE
+				deltaO = deltaI + deltaE
+				rO = float64(r)
 			}
 
-			im_cone.Set(c, r, color.Gray{uint8(gray)})
+			if r%10 == 0 {
+				//fmt.Printf(".")
+				fmt.Printf("\ndeltaI,E[%3d] = %f, %f", r, deltaI, deltaE)
+			}
+		}
+		fmt.Printf("\n")
+		fmt.Printf("rO = %f", rO)
+	*/
+
+	// n
+	im_n := image.NewGray(image.Rect(0, 0, w, h))
+	for c := 0; c < w; c++ {
+		for r := 0; r < h; r++ {
+			h := h_n[c*h+r]
+			im_n.Set(c, r, color.Gray{uint8(h)})
 		}
 	}
+	f_n, err := os.Create("n.png")
+	defer f_n.Close()
+	png.Encode(f_n, im_n)
+	fmt.Printf("saved %s\n", f_n.Name())
 
-	fmt.Printf(" DONE\n")
-
-	// save heights
-	cone, err := os.Create("magnitude_cone.png")
-	defer cone.Close()
-	png.Encode(cone, im_cone)
-	fmt.Printf("saving %s\n", cone.Name())
+	// ~u
+	im_tu := image.NewGray(image.Rect(0, 0, w, h))
+	for c := 0; c < w; c++ {
+		for r := 0; r < h; r++ {
+			h := h_u[c*h+r]
+			im_tu.Set(c, r, color.Gray{uint8(h)})
+		}
+	}
+	f_tu, err := os.Create("tu.png")
+	defer f_tu.Close()
+	png.Encode(f_tu, im_tu)
+	fmt.Printf("saved %s\n", f_tu.Name())
 }
 
 var area = 2
