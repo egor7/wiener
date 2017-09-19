@@ -30,29 +30,24 @@ func main() {
 		log.Fatal(err)
 	}
 	defer f_u.Close()
-	fmt.Printf("read %s", f_u.Name())
-
-	// read image size
 	im_u, _, err := image.Decode(f_u)
 	if err != nil {
 		log.Fatal(err)
 	}
 	bounds := im_u.Bounds()
 	w, h := bounds.Max.X-bounds.Min.X, bounds.Max.Y-bounds.Min.Y
-	fmt.Printf(", size [%dx%d]\n", w, h)
-
 	h_u := make([]float64, w*h)
 	for c := 0; c < w; c++ {
 		for r := 0; r < h; r++ {
 			h_u[c*h+r] = float64(color.GrayModel.Convert(im_u.At(c, r)).(color.Gray).Y)
 		}
 	}
+	fmt.Printf("read %s, size [%dx%d]\n", f_u.Name(), w, h)
 
 	// n
 	h_n := make([]float64, w*h)
 	a := 2.0
 	a2 := a * a
-	s := 0.0
 	for c := 0; c < w; c++ {
 		for r := 0; r < h; r++ {
 			x := float64(c - w/2)
@@ -60,63 +55,33 @@ func main() {
 			x2 := x * x
 			y2 := y * y
 			h_n[c*h+r] = math.Exp((-x2-y2)/a2) / (a2 * math.Pi)
-			if h_n[c*h+r] > 0.01 {
-				fmt.Printf("h_n(%dx%d)=%f\n", c, r, h_n[c*h+r])
-			}
-			s += h_n[c*h+r]
 		}
 	}
-	fmt.Printf("%f\n", s)
 
-	/*
-		var (
-			//xaI, xbI, xcI          float64
-			xaE, xbE, xcE float64
-			//xaIO, xbIO, xcIO       float64
-			xaEO, xbEO, xcEO       float64
-			deltaI, deltaE, deltaO float64
-			rO                     float64
-		)
-		fmt.Printf("processing %s[%dx%d]...", imf.Name(), w, h)
-
-		//minr := w / 2
-		//if h < w {
-		//	minr = h / 2
-		//}
-		//for r := 5; r < minr-5; r++ {
-		for r := 80; r <= 80; r++ {
-			//xaI, xbI, xcI, deltaI = approx(img, w, h, r, -1)
-			xaE, xbE, xcE, deltaE = approx(img, w, h, r, 1)
-
-			if deltaO == 0 {
-				//xaIO = xaI
-				//xbIO = xbI
-				//xcIO = xcI
-				xaEO = xaE
-				xbEO = xbE
-				xcEO = xcE
-				deltaO = deltaI + deltaE
-				rO = float64(r)
-			}
-			if deltaI+deltaE < deltaO {
-				//xaIO = xaI
-				//xbIO = xbI
-				//xcIO = xcI
-				xaEO = xaE
-				xbEO = xbE
-				xcEO = xcE
-				deltaO = deltaI + deltaE
-				rO = float64(r)
-			}
-
-			if r%10 == 0 {
-				//fmt.Printf(".")
-				fmt.Printf("\ndeltaI,E[%3d] = %f, %f", r, deltaI, deltaE)
-			}
+	// s
+	h_s := make([]float64, w*h)
+	for c := 0; c < w; c++ {
+		for r := 0; r < h; r++ {
+			h_s[c*h+r] = smear(h_u, h_n, w, h, c, r)
 		}
-		fmt.Printf("\n")
-		fmt.Printf("rO = %f", rO)
-	*/
+		if c%10 == 0 {
+			fmt.Printf(".")
+		}
+	}
+	fmt.Printf("\n")
+
+	// s
+	im_s := image.NewGray(image.Rect(0, 0, w, h))
+	for c := 0; c < w; c++ {
+		for r := 0; r < h; r++ {
+			h := h_s[c*h+r]
+			im_s.Set(c, r, color.Gray{uint8(h)})
+		}
+	}
+	f_s, err := os.Create("s.png")
+	defer f_s.Close()
+	png.Encode(f_s, im_s)
+	fmt.Printf("saved %s\n", f_s.Name())
 
 	// n
 	im_n := image.NewGray(image.Rect(0, 0, w, h))
@@ -143,6 +108,22 @@ func main() {
 	defer f_tu.Close()
 	png.Encode(f_tu, im_tu)
 	fmt.Printf("saved %s\n", f_tu.Name())
+}
+
+func smear(orig, noise []float64, w, h int, oc, or int) float64 {
+	s := 0.0
+	for c := oc - 5; c < oc+5; c++ {
+		for r := or - 5; r < or+5; r++ {
+			nc := c - oc + w/2
+			nr := r - or + h/2
+
+			// tile
+			cc := (c + w) % w
+			rr := (r + h) % h
+			s += orig[cc*h+rr] * noise[nc*h+nr]
+		}
+	}
+	return s
 }
 
 var area = 2
