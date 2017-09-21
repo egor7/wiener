@@ -15,7 +15,8 @@ then
   ./wiener
 fi
 
-feh s.png 
+#feh -d --draw-tinted -g+1000+1000 hs.png
+feh -d -g+1000+1000 fs.png
 
 ### im_profile -v magnitude_cone.png magnitude_cone_profile.png
 ### feh magnitude_cone_profile.png 

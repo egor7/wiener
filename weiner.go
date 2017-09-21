@@ -5,6 +5,7 @@ import (
 	"image"
 	"log"
 	"math"
+	"math/cmplx"
 	"os"
 
 	"image/color"
@@ -20,7 +21,10 @@ import (
 // _ "image/gif"
 // _ "image/jpeg"
 
-import "github.com/gonum/matrix/mat64"
+import (
+	"github.com/gonum/matrix/mat64"
+	"github.com/mjibson/go-dsp/fft"
+)
 
 func main() {
 
@@ -74,8 +78,8 @@ func main() {
 	im_s := image.NewGray(image.Rect(0, 0, w, h))
 	for c := 0; c < w; c++ {
 		for r := 0; r < h; r++ {
-			h := h_s[c*h+r]
-			im_s.Set(c, r, color.Gray{uint8(h)})
+			height := h_s[c*h+r]
+			im_s.Set(c, r, color.Gray{uint8(height)})
 		}
 	}
 	f_s, err := os.Create("s.png")
@@ -87,8 +91,8 @@ func main() {
 	im_n := image.NewGray(image.Rect(0, 0, w, h))
 	for c := 0; c < w; c++ {
 		for r := 0; r < h; r++ {
-			h := h_n[c*h+r]
-			im_n.Set(c, r, color.Gray{uint8(h)})
+			height := h_n[c*h+r]
+			im_n.Set(c, r, color.Gray{uint8(height)})
 		}
 	}
 	f_n, err := os.Create("n.png")
@@ -100,14 +104,80 @@ func main() {
 	im_tu := image.NewGray(image.Rect(0, 0, w, h))
 	for c := 0; c < w; c++ {
 		for r := 0; r < h; r++ {
-			h := h_u[c*h+r]
-			im_tu.Set(c, r, color.Gray{uint8(h)})
+			height := h_u[c*h+r]
+			im_tu.Set(c, r, color.Gray{uint8(height)})
 		}
 	}
 	f_tu, err := os.Create("tu.png")
 	defer f_tu.Close()
 	png.Encode(f_tu, im_tu)
 	fmt.Printf("saved %s\n", f_tu.Name())
+
+	// H_s
+	F_s := make([][]complex128, w)
+	for c := 0; c < w; c++ {
+		F_s[c] = make([]complex128, h)
+		for r := 0; r < h; r++ {
+			F_s[c][r] = complex(h_s[c*h+r], 0)
+		}
+	}
+	H_s := fft.FFT2(F_s)
+	im_Hs := image.NewGray(image.Rect(0, 0, w, h))
+	for c := 0; c < w; c++ {
+		for r := 0; r < h; r++ {
+			height, _ := cmplx.Polar(H_s[c][r])
+			im_Hs.Set(c, r, color.Gray{uint8(height)})
+		}
+	}
+	f_Hs, err := os.Create("hs.png")
+	defer f_Hs.Close()
+	png.Encode(f_Hs, im_Hs)
+	fmt.Printf("saved %s\n", f_Hs.Name())
+
+	//fmt.Printf("%f\n", cmplx.Abs(H_s[0][0]))
+
+	// F_s
+	F_s = fft.IFFT2(H_s)
+	im_Fs := image.NewGray(image.Rect(0, 0, w, h))
+	for c := 0; c < w; c++ {
+		for r := 0; r < h; r++ {
+			height, _ := cmplx.Polar(F_s[c][r])
+			im_Fs.Set(c, r, color.Gray{uint8(height)})
+		}
+	}
+	f_Fs, err := os.Create("fs.png")
+	defer f_Fs.Close()
+	png.Encode(f_Fs, im_Fs)
+	fmt.Printf("saved %s\n", f_Fs.Name())
+
+	//// Equation 3-10.
+	//numSamples := 8
+	//x := func(n int) float64 {
+	//	wave0 := math.Sin(2.0 * math.Pi * float64(n) / 8.0)
+	//	wave1 := 0.5 * math.Sin(2*math.Pi*float64(n)/4.0+3.0*math.Pi/4.0)
+	//	return wave0 + wave1
+	//}
+	//
+	//// Discretize our function by sampling at 8 points.
+	//{
+	//	a := make([]float64, numSamples)
+	//	for i := 0; i < numSamples; i++ {
+	//		a[i] = x(i)
+	//	}
+	//
+	//	X := fft.FFTReal(a)
+	//
+	//	// Print the magnitude and phase at each frequency.
+	//	for i := 0; i < numSamples; i++ {
+	//		r, θ := cmplx.Polar(X[i])
+	//		θ *= 360.0 / (2 * math.Pi)
+	//		if dsputils.Float64Equal(r, 0) {
+	//			θ = 0 // (When the magnitude is close to 0, the angle is meaningless)
+	//		}
+	//		fmt.Printf("X(%d) = %.1f ∠ %.1f°\n", i, r, θ)
+	//	}
+	//}
+
 }
 
 func smear(orig, noise []float64, w, h int, oc, or int) float64 {
